@@ -39,6 +39,8 @@ SECTION_FUNC(reset, __reset)
  * the C domain
  */
 SECTION_FUNC(TEXT, __initialize)
+    la ra, __initialize /* Keeps debugger happy so it does not follow false trails... */
+
 #if CONFIG_SMP
     csrr a0, mhartid /* Who are we? */
 	/* First stage of wake up - we assume for MPFS that array has CONFIG_MP_NUM_CPUS + 1 */
@@ -64,6 +66,33 @@ no_e51:
 	j no_e51
 	
 not_e51:
+#endif
+#if defined(CONFIG_SOC_MPFS)
+    /*
+     * Temporary step, zeroise PMPs in case random values cause issues...
+     *
+     * MPFS has semi-random values in the registers after power up so this is
+     * a good idea unless you are booting from HSS etc which have already
+     * setup up PMPs.
+     */
+    csrw pmpcfg0,0
+    csrw pmpcfg2,0
+    csrw pmpaddr0,0
+    csrw pmpaddr1,0
+    csrw pmpaddr2,0
+    csrw pmpaddr3,0
+    csrw pmpaddr4,0
+    csrw pmpaddr5,0
+    csrw pmpaddr6,0
+    csrw pmpaddr7,0
+    csrw pmpaddr8,0
+    csrw pmpaddr9,0
+    csrw pmpaddr10,0
+    csrw pmpaddr11,0
+    csrw pmpaddr12,0
+    csrw pmpaddr13,0
+    csrw pmpaddr14,0
+    csrw pmpaddr15,0
 #endif
     /*
      * This will boot master core which is lowest numbered, just halt other cores.
@@ -100,6 +129,15 @@ not_e51:
 #endif
 	add t1, t1, t0
 
+#if CONFIG_SMP
+#ifdef CONFIG_BOARD_HART_TO_USE
+    li a1, CONFIG_BOARD_HART_TO_USE
+#else
+    li a1, 0
+#endif
+    csrr a0, mhartid
+    bne a0, a1, skip_stack_fill
+#endif
 	/* Populate z_interrupt_stacks with 0xaaaaaaaa */
 	li t2, 0xaaaaaaaa
 aa_loop:
@@ -112,6 +150,7 @@ aa_loop:
 	 * Initially, setup stack pointer to
 	 * z_interrupt_stacks[cpu] + CONFIG_ISR_STACK_SIZE
 	 */
+skip_stack_fill:
 	la sp, z_interrupt_stacks
 	li t0, CONFIG_ISR_STACK_SIZE
 #if defined(CONFIG_SMP)
